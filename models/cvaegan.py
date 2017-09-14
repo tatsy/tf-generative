@@ -215,17 +215,28 @@ class CVAEGAN(CondBaseModel):
 
     def train_on_batch(self, batch, index):
         x_r, c_r = batch
+        batchsize = len(x_r)
         z_p = np.random.uniform(-1, 1, size=(len(x_r), self.z_dims))
 
-        _, _, _, _, gen_loss, dis_loss, gen_acc, dis_acc, summary = self.sess.run(
-            (self.gen_trainer, self.enc_trainer, self.dis_trainer, self.cls_trainer, self.gen_loss, self.dis_loss, self.gen_acc, self.dis_acc, self.summary),
+        _, _, _, _, gen_loss, dis_loss, gen_acc, dis_acc = self.sess.run(
+            (self.gen_trainer, self.enc_trainer, self.dis_trainer, self.cls_trainer, self.gen_loss, self.dis_loss, self.gen_acc, self.dis_acc),
             feed_dict={
                 self.x_r: x_r, self.z_p: z_p, self.c_r: c_r,
                 self.z_test: self.test_data['z_test'], self.c_test: self.test_data['c_test']
             }
         )
 
-        self.writer.add_summary(summary, index)
+        summary_priod = 1000
+        if index // summary_priod != (index + batchsize) // summary_priod:
+            summary = self.sess.run(
+                self.summary,
+                feed_dict={
+                    self.x_r: x_r, self.z_p: z_p, self.c_r: c_r,
+                    self.z_test: self.test_data['z_test'], self.c_test: self.test_data['c_test']
+                }
+            )
+            self.writer.add_summary(summary, index)
+
         return [
             ('gen_loss', gen_loss), ('dis_loss', dis_loss),
             ('gen_acc', gen_acc), ('dis_acc', dis_acc)
@@ -361,7 +372,7 @@ class CVAEGAN(CondBaseModel):
             self.c_test = tf.placeholder(tf.float32, shape=(None, self.num_attrs))
 
             self.x_test = self.f_gen(self.z_test, self.c_test)
-            x_tile = self.image_tiling(self.x_test)
+            x_tile = self.image_tiling(self.x_test, self.test_size, self.num_attrs)
 
             # Summary
             tf.summary.image('x_real', self.x_r, 10)

@@ -47,7 +47,7 @@ class BaseModel(metaclass=ABCMeta):
         self.saver = None
         self.summary = None
 
-        self.test_size = 100
+        self.test_size = 10
         self.test_data = None
 
         self.test_mode = False
@@ -220,19 +220,17 @@ class BaseModel(metaclass=ABCMeta):
         """
         pass
 
-    def image_tiling(self, images):
-        n_images = self.test_size
-        img_arr = tf.split(images, n_images, 0)
-
-        size = int(math.ceil(math.sqrt(n_images)))
-        while len(img_arr) < size * size:
-            img_arr.append(tf.zeros(self.input_shape, tf.float32))
+    def image_tiling(self, images, rows, cols):
+        n_images = rows * cols
+        mg = max(self.input_shape[0], self.input_shape[1]) // 20
+        pad_img = tf.pad(images, [[0, 0], [mg, mg], [mg, mg], [0, 0]], constant_values=1.0)
+        img_arr = tf.split(pad_img, n_images, 0)
 
         rows = []
-        for i in range(size):
-            rows.append(tf.concat(img_arr[i * size : (i + 1) * size], axis=1))
+        for i in range(self.test_size):
+            rows.append(tf.concat(img_arr[i * cols: (i + 1) * cols], axis=2))
 
-        tile = tf.concat(rows, axis=2)
+        tile = tf.concat(rows, axis=1)
         return tile
 
 class CondBaseModel(BaseModel):
@@ -279,14 +277,3 @@ class CondBaseModel(BaseModel):
 
         figure = Image.fromarray((figure * 255.0).astype(np.uint8))
         figure.save(filename)
-
-    def image_tiling(self, images):
-        n_images = self.test_size * self.num_attrs
-        img_arr = tf.split(images, n_images, 0)
-
-        rows = []
-        for i in range(self.test_size):
-            rows.append(tf.concat(img_arr[i * self.num_attrs: (i + 1) * self.num_attrs], axis=2))
-
-        tile = tf.concat(rows, axis=1)
-        return tile

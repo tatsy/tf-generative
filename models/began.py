@@ -146,10 +146,20 @@ class BEGAN(BaseModel):
         z_D = np.random.uniform(-1.0, 1.0, size=(batchsize, self.z_dims))
         z_G = np.random.uniform(-1.0, 1.0, size=(batchsize, self.z_dims))
 
+        # Training
+        _, _, g_loss_D, g_loss_G, d_loss, _ = self.sess.run(
+            (self.gen_trainer, self.dis_trainer, self.gen_loss_D, self.gen_loss_D, self.dis_loss, self.update_k_t),
+            feed_dict={
+                self.x_train: x_batch,
+                self.z_D: z_D,
+                self.z_G: z_G
+            }
+        )
+
+        # Summary update
         if index // 1000 != (index + batchsize) // 1000:
-            # Training w/ summary
-            _, _, g_loss_D, g_loss_G, d_loss, _, summary = self.sess.run(
-                (self.gen_trainer, self.dis_trainer, self.gen_loss_D, self.gen_loss_D, self.dis_loss, self.update_k_t, self.summary),
+            summary = self.sess.run(
+                self.summary,
                 feed_dict={
                     self.x_train: x_batch,
                     self.z_D: z_D,
@@ -158,16 +168,6 @@ class BEGAN(BaseModel):
                 }
             )
             self.writer.add_summary(summary, index)
-        else:
-            # Training w/o summary
-            _, _, g_loss_D, g_loss_G, d_loss, _ = self.sess.run(
-                (self.gen_trainer, self.dis_trainer, self.gen_loss_D, self.gen_loss_D, self.dis_loss, self.update_k_t),
-                feed_dict={
-                    self.x_train: x_batch,
-                    self.z_D: z_D,
-                    self.z_G: z_G
-                }
-            )
 
         return [
             ('g_loss', g_loss_G),
@@ -182,7 +182,7 @@ class BEGAN(BaseModel):
         return x_sample
 
     def make_test_data(self):
-        self.test_data = np.random.uniform(-1, 1, size=(self.test_size, self.z_dims))
+        self.test_data = np.random.uniform(-1, 1, size=(self.test_size * self.test_size, self.z_dims))
 
     def build_model(self):
         # Trainer
@@ -219,7 +219,7 @@ class BEGAN(BaseModel):
         # Predictor
         self.z_test = tf.placeholder(tf.float32, shape=(None, self.z_dims))
         self.x_test = self.f_gen(self.z_test)
-        self.x_tile = self.image_tiling(self.x_test)
+        self.x_tile = self.image_tiling(self.x_test, self.test_size, self.test_size)
 
         tf.summary.image('x_real', self.x_train, 10)
         tf.summary.image('x_fake', x_f_G, 10)

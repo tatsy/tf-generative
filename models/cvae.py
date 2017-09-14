@@ -165,7 +165,7 @@ class CVAE(CondBaseModel):
         self.c_test = tf.placeholder(tf.float32, shape=(None, self.num_attrs))
 
         self.x_test = self.decoder(self.z_test, self.c_test)
-        x_tile = self.image_tiling(self.x_test)
+        x_tile = self.image_tiling(self.x_test, self.test_size, self.num_attrs)
 
         # Summary
         tf.summary.image('x_real', self.x_train, 10)

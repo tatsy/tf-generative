@@ -128,7 +128,7 @@ class DCGAN(BaseModel):
         return x_sample
 
     def make_test_data(self):
-        self.test_data = np.random.uniform(-1, 1, size=(self.test_size, self.z_dims))
+        self.test_data = np.random.uniform(-1, 1, size=(self.test_size * self.test_size, self.z_dims))
 
     def build_model(self):
         # Trainer
@@ -161,7 +161,7 @@ class DCGAN(BaseModel):
         self.z_test = tf.placeholder(tf.float32, shape=(None, self.z_dims))
         self.x_test = self.generator(self.z_test)
 
-        x_tile = self.image_tiling(self.x_test)
+        x_tile = self.image_tiling(self.x_test, self.test_size, self.test_size)
 
         tf.summary.image('x_real', self.x_train, 10)
         tf.summary.image('x_fake', x_fake, 10)
