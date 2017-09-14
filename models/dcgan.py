@@ -19,10 +19,6 @@ class Generator(object):
                 x = tf.nn.relu(x)
                 x = tf.reshape(x, [-1, w, w, 256])
 
-            # x = basic_deconv_layer(x, filters=256, strides=(2, 2))
-            # x = basic_deconv_layer(x, filters=128, strides=(2, 2))
-            # x = basic_deconv_layer(x, filters=64, strides=(2, 2))
-
             with tf.variable_scope('conv1'):
                 x = tf.layers.conv2d_transpose(x, 256, (5, 5), (2, 2), 'same', kernel_initializer=tf.contrib.layers.xavier_initializer())
                 x = tf.layers.batch_normalization(x, training=training)
@@ -55,10 +51,6 @@ class Discriminator(object):
 
     def __call__(self, inputs, training=True):
         with tf.variable_scope('discriminator', reuse=self.reuse):
-            # x = basic_conv_layer(inputs, filters=64, strides=(2, 2))
-            # x = basic_conv_layer(x, filters=128, strides=(2, 2))
-            # x = basic_conv_layer(x, filters=256, strides=(2, 2))
-
             with tf.variable_scope('conv1'):
                 x = tf.layers.conv2d(inputs, 64, (5, 5), (2, 2), 'same', kernel_initializer=tf.contrib.layers.xavier_initializer())
                 x = tf.layers.batch_normalization(x, training=training)

@@ -178,7 +178,15 @@ class CVAEGAN(CondBaseModel):
         super(CVAEGAN, self).__init__(input_shape=input_shape, name=name, **kwargs)
 
         self.z_dims = z_dims
+
+        # Parameters for feature matching
         self.use_feature_match = False
+        self.alpha = 0.7
+
+        self.E_f_D_r = None
+        self.E_f_D_p = None
+        self.E_f_C_r = None
+        self.E_f_C_p = None
 
         self.f_enc = None
         self.f_gen = None
@@ -286,7 +294,9 @@ class CVAEGAN(CondBaseModel):
                       tf.losses.sigmoid_cross_entropy(tf.zeros_like(y_p), y_p)
 
             with tf.name_scope('L_C'):
-                L_C = tf.losses.softmax_cross_entropy(self.c_r, c_r_pred)
+                L_C = tf.losses.softmax_cross_entropy(self.c_r, c_r_pred) - \
+                      tf.losses.softmax_cross_entropy(self.c_r, c_f) - \
+                      tf.losses.softmax_cross_entropy(self.c_r, c_p)
 
             self.enc_trainer = enc_opt.minimize(L_G + L_KL, var_list=self.f_enc.variables)
             self.gen_trainer = gen_opt.minimize(L_G + L_GD + L_GC, var_list=self.f_gen.variables)
@@ -386,15 +396,26 @@ class CVAEGAN(CondBaseModel):
             loss += 0.5 * tf.reduce_sum(tf.squared_difference(f_C_r, f_C_f), axis=[1])
             return tf.reduce_mean(loss)
 
-    def L_GD(self, f_1, f_2, name=None):
+    def L_GD(self, f_D_r, f_D_p):
         with tf.name_scope('L_GD'):
-            E_f_1 = tf.reduce_mean(f_1, axis=0)
-            E_f_2 = tf.reduce_mean(f_2, axis=0)
-            return 0.5 * tf.reduce_sum(tf.squared_difference(E_f_1, E_f_2, name=name))
+            # Compute loss
+            E_f_D_r = tf.reduce_mean(f_D_r, axis=0)
+            E_f_D_p = tf.reduce_mean(f_D_p, axis=0)
 
-    def L_GC(self, f_1, f_2, c):
+            # Update features
+            if self.E_f_D_r is None:
+                self.E_f_D_r = tf.zeros_like(E_f_D_r)
+
+            if self.E_f_D_p is None:
+                self.E_f_D_p = tf.zeros_like(E_f_D_p)
+
+            self.E_f_D_r = self.alpha * self.E_f_D_r + (1.0 - self.alpha) * E_f_D_r
+            self.E_f_D_p = self.alpha * self.E_f_D_p + (1.0 - self.alpha) * E_f_D_p
+            return 0.5 * tf.reduce_sum(tf.squared_difference(self.E_f_D_r, self.E_f_D_p))
+
+    def L_GC(self, f_C_r, f_C_p, c):
         with tf.name_scope('L_GC'):
-            image_shape = tf.shape(f_1)
+            image_shape = tf.shape(f_C_r)
 
             indices = tf.eye(self.num_attrs, dtype=tf.float32)
             indices = tf.tile(indices, (1, image_shape[0]))
@@ -410,14 +431,24 @@ class CVAEGAN(CondBaseModel):
             denom = tf.reduce_sum(denom, axis=[1, 2])
             denom = tf.tile(tf.reshape(denom, (-1, 1)), (1, image_shape[1]))
 
-            f_1_sum = tf.tile(f_1, (self.num_attrs, 1))
+            f_1_sum = tf.tile(f_C_r, (self.num_attrs, 1))
             f_1_sum = tf.multiply(f_1_sum, mask)
             f_1_sum = tf.reshape(f_1_sum, (self.num_attrs, image_shape[0], image_shape[1]))
             E_f_1 = tf.divide(tf.reduce_sum(f_1_sum, axis=1), denom + 1.0e-8)
 
-            f_2_sum = tf.tile(f_2, (self.num_attrs, 1))
+            f_2_sum = tf.tile(f_C_p, (self.num_attrs, 1))
             f_2_sum = tf.multiply(f_2_sum, mask)
             f_2_sum = tf.reshape(f_2_sum, (self.num_attrs, image_shape[0], image_shape[1]))
             E_f_2 = tf.divide(tf.reduce_sum(f_2_sum, axis=1), denom + 1.0e-8)
 
-            return 0.5 * tf.reduce_sum(tf.squared_difference(E_f_1, E_f_2))
+            # Update features
+            if self.E_f_C_r is None:
+                self.E_f_C_r = tf.zeros_like(E_f_1)
+
+            if self.E_f_C_p is None:
+                self.E_f_C_p = tf.zeros_like(E_f_2)
+
+            self.E_f_C_r = self.alpha * self.E_f_C_r + (1.0 - self.alpha) * E_f_1
+            self.E_f_C_p = self.alpha * self.E_f_C_p + (1.0 - self.alpha) * E_f_2
+
+            return 0.5 * tf.reduce_sum(tf.squared_difference(self.E_f_C_r, self.E_f_C_p))

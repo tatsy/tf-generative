@@ -1,6 +1,4 @@
 import os
-import sys
-import math
 import argparse
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -17,6 +15,7 @@ from datasets import load_data, mnist, svhn
 models = {
     'vae': VAE,
     'dcgan': DCGAN,
+    'began': BEGAN,
     'cvae': CVAE,
     'cvaegan': CVAEGAN
 }
