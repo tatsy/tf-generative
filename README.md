@@ -5,7 +5,7 @@ TensorFlow implementation of various deep generative networks such as VAE and GA
 
 ## Models
 
-#### Standard models
+### Standard models
 
 * Variational autoencoder (VAE) [Kingma et al. 2013]
 * Generative adversarial network (GAN or DCGAN) [Goodfellow et al. 2014]
@@ -13,25 +13,25 @@ TensorFlow implementation of various deep generative networks such as VAE and GA
 <!-- * Energy-based GAN (EBGAN) [Zhao et al. 2016] -->
 <!-- * Adversarially learned inference (ALI) [Dumoulin et al. 2017] -->
 
-#### Conditional models
+### Conditional models
 
 * Conditional variational autoencoder [Kingma et al. 2014]
 * CVAE-GAN [Bao et al. 2017]
 
 ## Usage
 
-#### Prepare datasets
+### Prepare datasets
 
-##### MNIST and SVHN
+#### MNIST and SVHN
 
 MNIST and SVHN datasets are automatically downloaded from their websites.
 
-##### CelebA
+#### CelebA
 
 First, download ``img_align_celeba.zip`` and ``list_attr_celeba.txt`` from CelebA [webpage](http://mmlab.ie.cuhk.edu.hk/projects/CelebA.html).
 Then, place these files to ``datasets`` and run ``create_database.py`` on ``databsets`` directory.
 
-#### Training
+### Training
 
 ```shell
 # Both standard and conditional models are available!
@@ -43,6 +43,12 @@ TensorBoard is also available with the following script.
 ```shell
 tensorboard --logdir="output/dcgan/log"
 ```
+
+### Results
+
+#### CVAE-GAN (for SVHN 10 epochs)
+
+<img src="results/svhn_cvaegan_epoch_0010_batch_73257.png" width="500px"/>
 
 ## References
 
