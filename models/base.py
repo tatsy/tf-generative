@@ -3,6 +3,7 @@ import sys
 import time
 import math
 import numpy as np
+from PIL import Image
 
 import matplotlib
 matplotlib.use('Agg')
@@ -43,6 +44,7 @@ class BaseModel(metaclass=ABCMeta):
 
         self.sess = tf.Session()
         self.writer = None
+        self.saver = None
         self.summary = None
 
         self.test_size = 100
@@ -97,24 +99,27 @@ class BaseModel(metaclass=ABCMeta):
             current_batch = tf.Variable(0, name='current_batch', dtype=tf.int32)
 
             # Initialize global variables
+            self.saver = tf.train.Saver()
             if self.resume is not None:
                 print('Resume training: %s' % self.resume)
                 self.load_model(self.resume)
             else:
                 self.sess.run(tf.global_variables_initializer())
+                self.sess.run(tf.local_variables_initializer())
+
+            # Update rule
+            num_data = len(datasets)
+            update_epoch = current_epoch.assign(current_epoch + 1)
+            update_batch = current_batch.assign(tf.mod(tf.minimum(current_batch + batchsize, num_data), num_data))
 
             self.writer = tf.summary.FileWriter(log_out_dir, self.sess.graph)
+            self.sess.graph.finalize()
 
             print('\n\n--- START TRAINING ---\n')
-            num_data = len(datasets)
             for e in range(current_epoch.eval(), epochs):
-                self.sess.run(current_epoch.assign(e))
-
                 perm = np.random.permutation(num_data)
                 start_time = time.time()
                 for b in range(current_batch.eval(), num_data, batchsize):
-                    self.sess.run(current_batch.assign(b))
-
                     bsize = min(batchsize, num_data - b)
                     indx = perm[b:b+bsize]
 
@@ -140,7 +145,8 @@ class BaseModel(metaclass=ABCMeta):
                     sys.stdout.flush()
 
                     # Save generated images
-                    if (b + bsize) % 10000 == 0 or (b + bsize) == num_data:
+                    save_period = 10000
+                    if b != 0 and ((b // save_period != (b + bsize) // save_period) or ((b + bsize) == num_data)):
                         outfile = os.path.join(res_out_dir, 'epoch_%04d_batch_%d.png' % (e + 1, b + bsize))
                         self.save_images(samples, outfile)
                         outfile = os.path.join(chk_out_dir, 'epoch_%04d' % (e + 1))
@@ -150,8 +156,11 @@ class BaseModel(metaclass=ABCMeta):
                         print('\nFinish testing: %s' % self.name)
                         return
 
+                    # Update batch index
+                    self.sess.run(update_batch)
+
                 print('')
-                self.sess.run(current_batch.assign(0))
+                self.sess.run(update_epoch)
 
     def make_batch(self, datasets, indx):
         """
@@ -168,27 +177,27 @@ class BaseModel(metaclass=ABCMeta):
         if imgs.shape[3] == 1:
             imgs = np.squeeze(imgs, axis=(3,))
 
-        fig = plt.figure(figsize=(8, 8))
-        grid = gridspec.GridSpec(10, 10, wspace=0.1, hspace=0.1)
-        for i in range(100):
-            ax = plt.Subplot(fig, grid[i])
-            if imgs.ndim == 4:
-                ax.imshow(imgs[i, :, :, :], interpolation='none', vmin=0.0, vmax=1.0)
-            else:
-                ax.imshow(imgs[i, :, :], cmap='gray', interpolation='none', vmin=0.0, vmax=1.0)
-            ax.axis('off')
-            fig.add_subplot(ax)
+        _, height, width, dims = imgs.shape
 
-        fig.savefig(filename, dpi=200)
-        plt.close(fig)
+        margin = min(width, height) // 10
+        figure = np.ones(((margin + height) * 10 + margin, (margin + width) * 10 + margin, dims), np.float32)
+
+        for i in range(100):
+            row = i // 10
+            col = i % 10
+
+            y = margin + (margin + height) * row
+            x = margin + (margin + width) * col
+            figure[y:y+height, x:x+width, :] = imgs[i, :, :, :]
+
+        figure = Image.fromarray((figure * 255.0).astype(np.uint8))
+        figure.save(filename)
 
     def save_model(self, model_file):
-        saver = tf.train.Saver()
-        saver.save(self.sess, model_file)
+        self.saver.save(self.sess, model_file)
 
     def load_model(self, model_file):
-        saver = tf.train.Saver()
-        saver.restore(self.sess, model_file)
+        self.saver.restore(self.sess, model_file)
 
     @abstractmethod
     def make_test_data(self):
@@ -254,22 +263,22 @@ class CondBaseModel(BaseModel):
 
         imgs = self.predict([samples, attrs]) * 0.5 + 0.5
         imgs = np.clip(imgs, 0.0, 1.0)
-        if imgs.shape[3] == 1:
-            imgs = np.squeeze(imgs, axis=(3,))
 
-        fig = plt.figure(figsize=(self.num_attrs, 10))
-        grid = gridspec.GridSpec(num_samples, self.num_attrs, wspace=0.1, hspace=0.1)
+        _, height, width, dims = imgs.shape
+
+        margin = min(width, height) // 10
+        figure = np.ones(((margin + height) * num_samples + margin, (margin + width) * self.num_attrs + margin, dims), np.float32)
+
         for i in range(num_samples * self.num_attrs):
-            ax = plt.Subplot(fig, grid[i])
-            if imgs.ndim == 4:
-                ax.imshow(imgs[i, :, :, :], interpolation='none', vmin=0.0, vmax=1.0)
-            else:
-                ax.imshow(imgs[i, :, :], cmap='gray', interpolation='none', vmin=0.0, vmax=1.0)
-            ax.axis('off')
-            fig.add_subplot(ax)
+            row = i // self.num_attrs
+            col = i % self.num_attrs
 
-        fig.savefig(filename, dpi=200)
-        plt.close(fig)
+            y = margin + (margin + height) * row
+            x = margin + (margin + width) * col
+            figure[y:y+height, x:x+width, :] = imgs[i, :, :, :]
+
+        figure = Image.fromarray((figure * 255.0).astype(np.uint8))
+        figure.save(filename)
 
     def image_tiling(self, images):
         n_images = self.test_size * self.num_attrs
