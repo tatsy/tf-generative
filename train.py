@@ -69,13 +69,9 @@ def main(_):
 
     # Training loop
     datasets.images = datasets.images * 2.0 - 1.0
-    if BaseModel in models[args.model].__bases__:
-        samples = np.random.normal(size=(100, args.zdims)).astype(np.float32)
-        model.main_loop(datasets.images, samples, epochs=args.epoch)
-    elif CondBaseModel in models[args.model].__bases__:
-        # Training loop
-        samples = np.random.normal(size=(10, args.zdims)).astype(np.float32)
-        model.main_loop(datasets, samples, epochs=args.epoch)
+    model.main_loop(datasets,
+                    epochs=args.epoch,
+                    batchsize=args.batchsize)
 
 if __name__ == '__main__':
     tf.app.run(main)

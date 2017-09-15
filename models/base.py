@@ -68,7 +68,7 @@ class BaseModel(metaclass=ABCMeta):
         errmsg = 'Input size should be 32 x 32 or 64 x 64!'
         raise Exception(errmsg)
 
-    def main_loop(self, datasets, samples, epochs=100, batchsize=50):
+    def main_loop(self, datasets, epochs=100, batchsize=50):
         """
         Main learning loop
         """
@@ -131,7 +131,6 @@ class BaseModel(metaclass=ABCMeta):
                     elapsed_time = time.time() - start_time
                     eta = elapsed_time / (b + bsize) * (num_data - (b + bsize))
                     ratio = 100.0 * (b + bsize) / num_data
-                    print(chr(27) + "[2K", end='')
                     print('Epoch #%d,  Batch: %d / %d (%6.2f %%)  ETA: %s' % \
                           (e + 1, b + bsize, num_data, ratio, time_format(eta)))
 
@@ -148,7 +147,7 @@ class BaseModel(metaclass=ABCMeta):
                     save_period = 10000
                     if b != 0 and ((b // save_period != (b + bsize) // save_period) or ((b + bsize) == num_data)):
                         outfile = os.path.join(res_out_dir, 'epoch_%04d_batch_%d.png' % (e + 1, b + bsize))
-                        self.save_images(samples, outfile)
+                        self.save_images(outfile)
                         outfile = os.path.join(chk_out_dir, 'epoch_%04d' % (e + 1))
                         self.save_model(outfile)
 
@@ -166,13 +165,13 @@ class BaseModel(metaclass=ABCMeta):
         """
         Get batch from datasets
         """
-        return datasets[indx]
+        return datasets.images[indx]
 
-    def save_images(self, samples, filename):
+    def save_images(self, filename):
         """
         Save images generated from random sample numbers
         """
-        imgs = self.predict(samples) * 0.5 + 0.5
+        imgs = self.predict(self.test_data) * 0.5 + 0.5
         imgs = np.clip(imgs, 0.0, 1.0)
         if imgs.shape[3] == 1:
             imgs = np.squeeze(imgs, axis=(3,))
@@ -249,17 +248,19 @@ class CondBaseModel(BaseModel):
         attrs = datasets.attrs[indx]
         return images, attrs
 
-    def save_images(self, samples, filename):
+    def save_images(self, filename):
         assert self.attr_names is not None
 
-        num_samples = len(samples)
+        test_images, test_attrs = self.test_data
+
+        num_samples = len(test_images)
         attrs = np.identity(self.num_attrs)
         attrs = np.tile(attrs, (num_samples, 1))
 
-        samples = np.tile(samples, (1, self.num_attrs))
+        samples = np.tile(test_images, (1, self.num_attrs))
         samples = samples.reshape((num_samples * self.num_attrs, -1))
 
-        imgs = self.predict([samples, attrs]) * 0.5 + 0.5
+        imgs = self.predict(self.test_data) * 0.5 + 0.5
         imgs = np.clip(imgs, 0.0, 1.0)
 
         _, height, width, dims = imgs.shape
