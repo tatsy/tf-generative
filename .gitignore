@@ -1,6 +1,8 @@
 output/*
 datasets/files/*
 
+__pycache__
+
 # Compiled source #
 ###################
 *.com

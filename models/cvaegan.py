@@ -34,12 +34,15 @@ class Encoder(object):
                 x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
-            with tf.variable_scope('fc1'):
-                x = tf.contrib.layers.flatten(x)
-                x = tf.layers.dense(x, 1024)
+            with tf.variable_scope('conv4'):
+                x = tf.layers.conv2d(x, 512, (5, 5), (2, 2), 'same')
+                x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
-            with tf.variable_scope('fc2'):
+            with tf.variable_scope('global_avg'):
+                x = tf.reduce_mean(x, axis=[1, 2])
+
+            with tf.variable_scope('fc1'):
                 z_avg = tf.layers.dense(x, self.z_dims)
                 z_log_var = tf.layers.dense(x, self.z_dims)
 
@@ -115,13 +118,16 @@ class Classifier(object):
                 x = tf.layers.batch_normalization(x, training=training)
                 x = tf.nn.relu(x)
 
-            with tf.variable_scope('fc1'):
-                x = tf.contrib.layers.flatten(x)
-                x = tf.layers.dense(x, 1024)
+            with tf.variable_scope('conv4'):
+                x = tf.layers.conv2d(x, 512, (5, 5), (2, 2), 'same')
                 x = tf.layers.batch_normalization(x, training=training)
-                f = tf.nn.relu(x)
+                x = tf.nn.relu(x)
 
-            with tf.variable_scope('fc2'):
+            with tf.variable_scope('global_avg'):
+                x = tf.reduce_mean(x, axis=[1, 2])
+
+            with tf.variable_scope('fc1'):
+                f = tf.contrib.layers.flatten(x)
                 y = tf.layers.dense(f, self.num_attrs)
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
@@ -153,13 +159,16 @@ class Discriminator(object):
                 x = tf.layers.batch_normalization(x, training=training)
                 x = tf.nn.relu(x)
 
-            with tf.variable_scope('fc1'):
-                x = tf.contrib.layers.flatten(x)
-                x = tf.layers.dense(x, 1024)
+            with tf.variable_scope('conv4'):
+                x = tf.layers.conv2d(x, 512, (5, 5), (2, 2), 'same')
                 x = tf.layers.batch_normalization(x, training=training)
-                f = tf.nn.relu(x)
+                x = tf.nn.relu(x)
 
-            with tf.variable_scope('fc2'):
+            with tf.variable_scope('global_avg'):
+                x = tf.reduce_mean(x, axis=[1, 2])
+
+            with tf.variable_scope('fc1'):
+                f = tf.contrib.layers.flatten(x)
                 y = tf.layers.dense(f, 1)
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
@@ -290,8 +299,8 @@ class CVAEGAN(CondBaseModel):
 
         enc_opt = tf.train.AdamOptimizer(learning_rate=2.0e-4, beta1=0.5)
         gen_opt = tf.train.AdamOptimizer(learning_rate=2.0e-4, beta1=0.5)
-        cls_opt = tf.train.AdamOptimizer(learning_rate=2.0e-6, beta1=0.2)
-        dis_opt = tf.train.AdamOptimizer(learning_rate=2.0e-6, beta1=0.2)
+        cls_opt = tf.train.AdamOptimizer(learning_rate=2.0e-4, beta1=0.5)
+        dis_opt = tf.train.AdamOptimizer(learning_rate=2.0e-4, beta1=0.5)
 
         if self.use_feature_match:
             # Use feature matching (it is usually unstable)
@@ -305,9 +314,7 @@ class CVAEGAN(CondBaseModel):
                       tf.losses.sigmoid_cross_entropy(tf.zeros_like(y_p), y_p)
 
             with tf.name_scope('L_C'):
-                L_C = tf.losses.softmax_cross_entropy(self.c_r, c_r_pred) - \
-                      tf.losses.softmax_cross_entropy(self.c_r, c_f) - \
-                      tf.losses.softmax_cross_entropy(self.c_r, c_p)
+                L_C = tf.losses.softmax_cross_entropy(self.c_r, c_r_pred)
 
             self.enc_trainer = enc_opt.minimize(L_G + L_KL, var_list=self.f_enc.variables)
             self.gen_trainer = gen_opt.minimize(L_G + L_GD + L_GC, var_list=self.f_gen.variables)
@@ -322,7 +329,7 @@ class CVAEGAN(CondBaseModel):
             self.c_test = tf.placeholder(tf.float32, shape=(None, self.num_attrs))
 
             self.x_test = self.f_gen(self.z_test, self.c_test)
-            x_tile = self.image_tiling(self.x_test)
+            x_tile = self.image_tiling(self.x_test, self.test_size, self.num_attrs)
 
             # Summary
             tf.summary.image('x_real', self.x_r, 10)
@@ -347,6 +354,7 @@ class CVAEGAN(CondBaseModel):
                       tf.losses.softmax_cross_entropy(c_r_aug, c_p)
 
             with tf.name_scope('L_rec'):
+                # L_rec =  0.5 * tf.losses.mean_squared_error(self.x_r, x_f)
                 L_rec =  0.5 * tf.reduce_mean(tf.reduce_sum(tf.squared_difference(self.x_r, x_f), axis=[1, 2, 3]))
 
             with tf.name_scope('L_D'):
@@ -402,10 +410,11 @@ class CVAEGAN(CondBaseModel):
     def L_G(self, x_r, x_f, f_D_r, f_D_f, f_C_r, f_C_f):
         with tf.name_scope('L_G'):
             loss = tf.constant(0.0, dtype=tf.float32)
-            loss += 0.5 * tf.reduce_sum(tf.squared_difference(x_r, x_f), axis=[1, 2, 3])
-            loss += 0.5 * tf.reduce_sum(tf.squared_difference(f_D_r, f_D_f), axis=[1])
-            loss += 0.5 * tf.reduce_sum(tf.squared_difference(f_C_r, f_C_f), axis=[1])
-            return tf.reduce_mean(loss)
+            loss += 0.5 * tf.reduce_mean(tf.reduce_sum(tf.squared_difference(x_r, x_f), axis=[1, 2, 3]))
+            loss += 0.5 * tf.reduce_mean(tf.reduce_sum(tf.squared_difference(f_D_r, f_D_f), axis=[1]))
+            loss += 0.5 * tf.reduce_mean(tf.reduce_sum(tf.squared_difference(f_C_r, f_C_f), axis=[1]))
+
+        return loss
 
     def L_GD(self, f_D_r, f_D_p):
         with tf.name_scope('L_GD'):
@@ -462,4 +471,5 @@ class CVAEGAN(CondBaseModel):
             self.E_f_C_r = self.alpha * self.E_f_C_r + (1.0 - self.alpha) * E_f_1
             self.E_f_C_p = self.alpha * self.E_f_C_p + (1.0 - self.alpha) * E_f_2
 
+            # return 0.5 * tf.losses.mean_squared_error(self.E_f_C_r, self.E_f_C_p)
             return 0.5 * tf.reduce_sum(tf.squared_difference(self.E_f_C_r, self.E_f_C_p))

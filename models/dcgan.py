@@ -36,7 +36,7 @@ class Generator(object):
 
             with tf.variable_scope('conv4'):
                 d = self.input_shape[2]
-                x = tf.layers.conv2d_transpose(x, 1, (3, 3), (1, 1), 'same', kernel_initializer=tf.contrib.layers.xavier_initializer())
+                x = tf.layers.conv2d_transpose(x, d, (3, 3), (1, 1), 'same', kernel_initializer=tf.contrib.layers.xavier_initializer())
                 x = tf.tanh(x)
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
@@ -66,12 +66,15 @@ class Discriminator(object):
                 x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
-            with tf.variable_scope('fc1'):
-                x = tf.contrib.layers.flatten(x)
-                x = tf.layers.dense(x, 1024, kernel_initializer=tf.contrib.layers.xavier_initializer())
-                x = tf.nn.relu(x)
+            with tf.variable_scope('conv4'):
+                x = tf.layers.conv2d(x, 512, (5, 5), (2, 2), 'same', kernel_initializer=tf.contrib.layers.xavier_initializer())
+                x = tf.layers.batch_normalization(x, training=training)
+                x = lrelu(x)
 
-            with tf.variable_scope('fc2'):
+            with tf.variable_scope('global_avg'):
+                x = tf.reduce_mean(x, axis=[1, 2])
+
+            with tf.variable_scope('fc1'):
                 y = tf.layers.dense(x, 1)
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
@@ -150,7 +153,7 @@ class DCGAN(BaseModel):
         y_real = self.discriminator(self.x_train)
         self.dis_loss = 0.5 * tf.losses.sigmoid_cross_entropy(tf.ones_like(y_real), y_real) + \
                         0.5 * tf.losses.sigmoid_cross_entropy(tf.zeros_like(y_fake), y_fake)
-        self.dis_optimizer = tf.train.AdamOptimizer(1.0e-5, beta1=0.5) \
+        self.dis_optimizer = tf.train.AdamOptimizer(2.0e-4, beta1=0.5) \
                              .minimize(self.dis_loss, var_list=self.discriminator.variables)
 
         self.gen_acc = binary_accuracy(tf.ones_like(y_fake), y_fake)

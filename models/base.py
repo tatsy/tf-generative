@@ -251,24 +251,25 @@ class CondBaseModel(BaseModel):
     def save_images(self, filename):
         assert self.attr_names is not None
 
-        test_images, test_attrs = self.test_data
+        try:
+            samples = self.test_data['z_test']
+        except KeyError as e:
+            print('The key "z_test" is not found in test_data')
 
-        num_samples = len(test_images)
-        attrs = np.identity(self.num_attrs)
-        attrs = np.tile(attrs, (num_samples, 1))
+        try:
+            attrs = self.test_data['c_test']
+        except KeyError as e:
+            print('The key "c_test" is not found in test_data')
 
-        samples = np.tile(test_images, (1, self.num_attrs))
-        samples = samples.reshape((num_samples * self.num_attrs, -1))
-
-        imgs = self.predict(self.test_data) * 0.5 + 0.5
+        imgs = self.predict([samples, attrs]) * 0.5 + 0.5
         imgs = np.clip(imgs, 0.0, 1.0)
 
         _, height, width, dims = imgs.shape
 
         margin = min(width, height) // 10
-        figure = np.ones(((margin + height) * num_samples + margin, (margin + width) * self.num_attrs + margin, dims), np.float32)
+        figure = np.ones(((margin + height) * self.test_size + margin, (margin + width) * self.num_attrs + margin, dims), np.float32)
 
-        for i in range(num_samples * self.num_attrs):
+        for i in range(self.test_size * self.num_attrs):
             row = i // self.num_attrs
             col = i % self.num_attrs
 

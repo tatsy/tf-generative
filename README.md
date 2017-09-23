@@ -46,9 +46,13 @@ tensorboard --logdir="output/dcgan/log"
 
 ### Results
 
-#### CVAE-GAN (for SVHN 10 epochs)
+#### DCGAN (for SVHN 50 epochs)
 
-<img src="results/svhn_cvaegan_epoch_0010_batch_73257.png" width="500px"/>
+<img src="results/svhn_dcgan_epoch_0050_batch_73257.png" width="500px"/>
+
+#### CVAE-GAN (for SVHN 50 epochs)
+
+<img src="results/svhn_cvaegan_epoch_0050_batch_73257.png" width="500px"/>
 
 ## References
 
