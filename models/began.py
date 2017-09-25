@@ -68,16 +68,15 @@ class Discriminator(object):
                                      kernel_initializer=tf.contrib.layers.xavier_initializer())
                 x = lrelu(x)
 
-            with tf.variable_scope('fc1'):
-                x = tf.contrib.layers.flatten(x)
-                x = tf.layers.dense(x, 1024, kernel_initializer=tf.contrib.layers.xavier_initializer())
-                x = lrelu(x)
+            with tf.variable_scope('global_average'):
+                x = tf.reduce_mean(x, axis=[1, 2])
 
             with tf.variable_scope('fc2'):
                 w = self.input_shape[0] // (2 ** 3)
-                x = tf.layers.dense(x, w * w * 256, kernel_initializer=tf.contrib.layers.xavier_initializer())
+                x = tf.reshape(x, [-1, 1, 1, 256])
+                x = tf.layers.conv2d_transpose(x, 256, (w, w), (1, 1), 'valid',
+                                               kernel_initializer=tf.contrib.layers.xavier_initializer())
                 x = lrelu(x)
-                x = tf.reshape(x, (-1, w, w, 256))
 
             with tf.variable_scope('deconv1'):
                 x = tf.layers.conv2d_transpose(x, 256, (5, 5), (2, 2), 'same',
@@ -147,12 +146,18 @@ class BEGAN(BaseModel):
         z_G = np.random.uniform(-1.0, 1.0, size=(batchsize, self.z_dims))
 
         # Training
-        _, _, g_loss_D, g_loss_G, d_loss, _ = self.sess.run(
-            (self.gen_trainer, self.dis_trainer, self.gen_loss_D, self.gen_loss_D, self.dis_loss, self.update_k_t),
+        _, g_loss, = self.sess.run(
+            (self.gen_trainer, self.gen_loss_G),
+            feed_dict={
+                self.z_G: z_G
+            }
+        )
+
+        _, _, d_loss, _ = self.sess.run(
+            (self.dis_trainer, self.gen_loss_D, self.dis_loss, self.update_k_t),
             feed_dict={
                 self.x_train: x_batch,
                 self.z_D: z_D,
-                self.z_G: z_G
             }
         )
 
@@ -170,7 +175,7 @@ class BEGAN(BaseModel):
             self.writer.add_summary(summary, index)
 
         return [
-            ('g_loss', g_loss_G),
+            ('g_loss', g_loss),
             ('d_loss', d_loss)
         ]
 
@@ -189,8 +194,8 @@ class BEGAN(BaseModel):
         self.f_dis = Discriminator(self.input_shape)
         self.f_gen = Generator(self.input_shape)
 
-        self.z_D = tf.placeholder(tf.float32, shape=(None, self.z_dims))
-        self.z_G = tf.placeholder(tf.float32, shape=(None, self.z_dims))
+        self.z_D = tf.placeholder(tf.float32, shape=(None, self.z_dims), name='z_D')
+        self.z_G = tf.placeholder(tf.float32, shape=(None, self.z_dims), name='z_G')
 
         x_f_D = self.f_gen(self.z_D)
         x_f_D_pred = self.f_dis(x_f_D)
@@ -198,7 +203,7 @@ class BEGAN(BaseModel):
         x_f_G = self.f_gen(self.z_G)
         x_f_G_pred = self.f_dis(x_f_G)
 
-        self.x_train = tf.placeholder(tf.float32, shape=(None,) + self.input_shape)
+        self.x_train = tf.placeholder(tf.float32, shape=(None,) + self.input_shape, name='x_train')
         x_train_pred = self.f_dis(self.x_train)
 
         self.gen_loss_D = tf.losses.absolute_difference(x_f_D, x_f_D_pred)
@@ -211,7 +216,7 @@ class BEGAN(BaseModel):
         if self.boundary_equil:
             self.gen_trainer = gen_opt.minimize(self.gen_loss_G, var_list=self.f_gen.variables)
             self.dis_trainer = dis_opt.minimize(self.dis_loss - self.k_t * self.gen_loss_D, var_list=self.f_dis.variables)
-            self.update_k_t = self.k_t.assign(tf.clip_by_value(self.k_t + self.lambda_k * (self.gamma * self.dis_loss - self.gen_loss_G), 0.0, 1.0))
+            self.update_k_t = self.k_t.assign(tf.clip_by_value(self.k_t + self.lambda_k * (self.gamma * self.dis_loss - self.gen_loss_D), 0.0, 1.0))
         else:
             self.gen_trainer = gen_opt.minimize(self.gen_loss_G, var_list=self.f_gen.variables)
             self.dis_trainer = dis_opt.minimize(self.dis_loss - tf.maximum(0.0, self.margin - self.gen_loss_D), var_list=self.f_dis.variables)
