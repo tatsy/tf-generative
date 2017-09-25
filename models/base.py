@@ -252,16 +252,18 @@ class CondBaseModel(BaseModel):
         assert self.attr_names is not None
 
         try:
-            samples = self.test_data['z_test']
+            test_samples = self.test_data['z_test']
         except KeyError as e:
-            print('The key "z_test" is not found in test_data')
+            print('Key "z_test" must be provided in "make_test_data" method!')
+            raise e
 
         try:
-            attrs = self.test_data['c_test']
+            test_attrs = self.test_data['c_test']
         except KeyError as e:
-            print('The key "c_test" is not found in test_data')
+            print('Key "c_test" must be provided in "make_test_data" method!')
+            raise e
 
-        imgs = self.predict([samples, attrs]) * 0.5 + 0.5
+        imgs = self.predict([test_samples, test_attrs]) * 0.5 + 0.5
         imgs = np.clip(imgs, 0.0, 1.0)
 
         _, height, width, dims = imgs.shape
