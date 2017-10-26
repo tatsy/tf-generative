@@ -7,6 +7,7 @@ from .utils import *
 class Encoder(object):
     def __init__(self, input_shape, z_dims):
         self.variables = None
+        self.update_ops = None
         self.reuse = False
         self.input_shape = input_shape
         self.z_dims = z_dims
@@ -36,6 +37,7 @@ class Encoder(object):
                 z_log_var = tf.layers.dense(x, self.z_dims)
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='encoder')
+        self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope='encoder')
         self.reuse = True
 
         return z_avg, z_log_var
@@ -43,6 +45,7 @@ class Encoder(object):
 class Decoder(object):
     def __init__(self, input_shape, z_dims):
         self.variables = None
+        self.update_ops = None
         self.reuse = False
         self.input_shape = input_shape
         self.z_dims = z_dims
@@ -77,6 +80,7 @@ class Decoder(object):
                 x = tf.tanh(x)
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='decoder')
+        self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope='decoder')
         self.reuse = True
 
         return x
@@ -134,14 +138,16 @@ class VAE(BaseModel):
         z_avg, z_log_var = self.encoder(self.x_train)
         z_sample = sample_normal(z_avg, z_log_var)
         x_sample = self.decoder(z_sample)
-        x_sample_from_avg = self.decoder(z_avg)
 
         rec_loss_scale = tf.constant(np.prod(self.input_shape), tf.float32)
         self.rec_loss = tf.losses.absolute_difference(self.x_train, x_sample) * rec_loss_scale
         self.kl_loss = kl_loss(z_avg, z_log_var)
 
         optim = tf.train.AdamOptimizer(learning_rate=2.0e-4, beta1=0.5)
-        self.train_op = optim.minimize(self.rec_loss + self.kl_loss)
+        fmin = optim.minimize(self.rec_loss + self.kl_loss)
+
+        with tf.control_dependencies([fmin] + self.encoder.update_ops + self.decoder.update_ops):
+            self.train_op = tf.no_op(name='train')
 
         # Predictor
         self.z_test = tf.placeholder(tf.float32, shape=(None, self.z_dims))

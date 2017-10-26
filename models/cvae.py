@@ -32,17 +32,15 @@ class Encoder(object):
                 x = tf.layers.batch_normalization(x, training=training)
                 x = tf.nn.relu(x)
 
-            with tf.variable_scope('fc1'):
-                x = tf.contrib.layers.flatten(x)
-                x = tf.layers.dense(x, 1024)
-                x = tf.layers.batch_normalization(x, training=training)
-                x = tf.nn.relu(x)
+            with tf.variable_scope('global_average'):
+                x = tf.reduce_mean(x, axis=[1, 2])
 
-            with tf.variable_scope('fc2'):
+            with tf.variable_scope('fc1'):
                 z_avg = tf.layers.dense(x, self.z_dims)
                 z_log_var = tf.layers.dense(x, self.z_dims)
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='encoder')
+        self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope='encoder')
         self.reuse = True
 
         return z_avg, z_log_var
@@ -84,6 +82,7 @@ class Decoder(object):
                 x = tf.tanh(x)
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='decoder')
+        self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope='decoder')
         self.reuse = True
 
         return x
@@ -101,6 +100,7 @@ class CVAE(CondBaseModel):
 
         self.total_loss = None
         self.optimizer = None
+        self.train_op = None
 
         self.encoder = None
         self.decoder = None
@@ -118,7 +118,7 @@ class CVAE(CondBaseModel):
         x_batch, c_batch = batch
 
         _, loss, summary = self.sess.run(
-            (self.optimizer, self.total_loss, self.summary),
+            (self.train_op, self.total_loss, self.summary),
             feed_dict={self.x_train: x_batch, self.c_train: c_batch, self.z_test: self.test_data['z_test'], self.c_test: self.test_data['c_test']}
         )
 
@@ -159,6 +159,9 @@ class CVAE(CondBaseModel):
         self.total_loss += tf.reduce_mean(tf.squared_difference(self.x_train, x_sample))
         self.total_loss += kl_loss(z_avg, z_log_var)
         self.optimizer = tf.train.AdamOptimizer(learning_rate=2.0e-4, beta1=0.5).minimize(self.total_loss)
+
+        with tf.control_dependencies([self.optimizer] + self.encoder.update_ops + self.decoder.update_ops):
+            self.train_op = tf.no_op(name='train')
 
         # Predictor
         self.z_test = tf.placeholder(tf.float32, shape=(None, self.z_dims))

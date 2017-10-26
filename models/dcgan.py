@@ -7,6 +7,7 @@ from .utils import *
 class Generator(object):
     def __init__(self, input_shape):
         self.variables = None
+        self.update_ops = None
         self.reuse = False
         self.input_shape = input_shape
 
@@ -40,6 +41,7 @@ class Generator(object):
                 x = tf.tanh(x)
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='generator')
+        self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope='generator')
         self.reuse = True
         return x
 
@@ -47,6 +49,7 @@ class Discriminator(object):
     def __init__(self, input_shape):
         self.input_shape = input_shape
         self.variables = None
+        self.update_ops = None
         self.reuse = False
 
     def __call__(self, inputs, training=True):
@@ -71,13 +74,14 @@ class Discriminator(object):
                 x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
-            with tf.variable_scope('global_avg'):
+            with tf.variable_scope('global_average'):
                 x = tf.reduce_mean(x, axis=[1, 2])
 
             with tf.variable_scope('fc1'):
                 y = tf.layers.dense(x, 1)
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='discriminator')
+        self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope='discriminator')
         self.reuse = True
         return y
 
@@ -96,6 +100,7 @@ class DCGAN(BaseModel):
         self.dis_loss = None
         self.gen_optimizer = None
         self.dis_optimizer = None
+        self.train_op = None
 
         self.gen_acc = None
         self.dis_acc = None
@@ -111,8 +116,8 @@ class DCGAN(BaseModel):
         batchsize = x_batch.shape[0]
         z_sample = np.random.uniform(-1.0, 1.0, size=(batchsize, self.z_dims))
 
-        _, _, g_loss, d_loss, g_acc, d_acc, summary = self.sess.run(
-            (self.gen_optimizer, self.dis_optimizer, self.gen_loss, self.dis_loss, self.gen_acc, self.dis_acc, self.summary),
+        _, g_loss, d_loss, g_acc, d_acc, summary = self.sess.run(
+            (self.train_op, self.gen_loss, self.dis_loss, self.gen_acc, self.dis_acc, self.summary),
             feed_dict={self.x_train: x_batch, self.z_train: z_sample, self.z_test: self.test_data}
         )
 
@@ -160,9 +165,14 @@ class DCGAN(BaseModel):
         self.dis_acc = 0.5 * binary_accuracy(tf.ones_like(y_real), y_real) + \
                        0.5 * binary_accuracy(tf.zeros_like(y_fake), y_fake)
 
+        with tf.control_dependencies([self.gen_optimizer, self.dis_optimizer] + \
+                                      self.discriminator.update_ops + \
+                                      self.generator.update_ops):
+            self.train_op = tf.no_op(name='train')
+
         # Predictor
         self.z_test = tf.placeholder(tf.float32, shape=(None, self.z_dims))
-        self.x_test = self.generator(self.z_test)
+        self.x_test = self.generator(self.z_test, training=False)
 
         x_tile = self.image_tiling(self.x_test, self.test_size, self.test_size)
 

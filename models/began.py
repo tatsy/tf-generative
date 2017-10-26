@@ -7,6 +7,7 @@ from .utils import *
 class Generator(object):
     def __init__(self, input_shape):
         self.variables = None
+        self.update_ops = None
         self.reuse = False
         self.input_shape = input_shape
         self.name = 'generator'
@@ -22,16 +23,19 @@ class Generator(object):
             with tf.variable_scope('deconv1'):
                 x = tf.layers.conv2d_transpose(x, 256, (5, 5), (2, 2), 'same',
                                                kernel_initializer=tf.contrib.layers.xavier_initializer())
+                # x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
             with tf.variable_scope('deconv2'):
                 x = tf.layers.conv2d_transpose(x, 128, (5, 5), (2, 2), 'same',
                                                kernel_initializer=tf.contrib.layers.xavier_initializer())
+                # x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
             with tf.variable_scope('deconv3'):
                 x = tf.layers.conv2d_transpose(x, 64, (5, 5), (2, 2), 'same',
                                                kernel_initializer=tf.contrib.layers.xavier_initializer())
+                # x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
             with tf.variable_scope('deconv4'):
@@ -41,6 +45,7 @@ class Generator(object):
                 x = tf.tanh(x)
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
+        self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope=self.name)
         self.reuse = True
         return x
 
@@ -48,6 +53,7 @@ class Discriminator(object):
     def __init__(self, input_shape):
         self.input_shape = input_shape
         self.variables = None
+        self.update_ops = None
         self.reuse = False
         self.name = 'discriminator'
 
@@ -56,16 +62,19 @@ class Discriminator(object):
             with tf.variable_scope('conv1'):
                 x = tf.layers.conv2d(inputs, 64, (5, 5), (2, 2), 'same',
                                      kernel_initializer=tf.contrib.layers.xavier_initializer())
+                # x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
             with tf.variable_scope('conv2'):
                 x = tf.layers.conv2d(x, 128, (5, 5), (2, 2), 'same',
                                      kernel_initializer=tf.contrib.layers.xavier_initializer())
+                # x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
             with tf.variable_scope('conv3'):
                 x = tf.layers.conv2d(x, 256, (5, 5), (2, 2), 'same',
                                      kernel_initializer=tf.contrib.layers.xavier_initializer())
+                # x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
             with tf.variable_scope('global_average'):
@@ -76,21 +85,25 @@ class Discriminator(object):
                 x = tf.reshape(x, [-1, 1, 1, 256])
                 x = tf.layers.conv2d_transpose(x, 256, (w, w), (1, 1), 'valid',
                                                kernel_initializer=tf.contrib.layers.xavier_initializer())
+                # x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
             with tf.variable_scope('deconv1'):
                 x = tf.layers.conv2d_transpose(x, 256, (5, 5), (2, 2), 'same',
                                                kernel_initializer=tf.contrib.layers.xavier_initializer())
+                # x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
             with tf.variable_scope('deconv2'):
                 x = tf.layers.conv2d_transpose(x, 128, (5, 5), (2, 2), 'same',
                                                kernel_initializer=tf.contrib.layers.xavier_initializer())
+                # x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
             with tf.variable_scope('deconv3'):
                 x = tf.layers.conv2d_transpose(x, 64, (5, 5), (2, 2), 'same',
                                                kernel_initializer=tf.contrib.layers.xavier_initializer())
+                # x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
             with tf.variable_scope('deconv4'):
@@ -100,6 +113,7 @@ class Discriminator(object):
                 x = tf.tanh(x)
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
+        self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope=self.name)
         self.reuse = True
         return x
 
@@ -138,6 +152,8 @@ class BEGAN(BaseModel):
         self.x_test = None
         self.x_tile = None
 
+        self.train_op = None
+
         self.build_model()
 
     def train_on_batch(self, x_batch, index):
@@ -146,17 +162,11 @@ class BEGAN(BaseModel):
         z_G = np.random.uniform(-1.0, 1.0, size=(batchsize, self.z_dims))
 
         # Training
-        _, g_loss, = self.sess.run(
-            (self.gen_trainer, self.gen_loss_G),
-            feed_dict={
-                self.z_G: z_G
-            }
-        )
-
-        _, _, d_loss, _ = self.sess.run(
-            (self.dis_trainer, self.gen_loss_D, self.dis_loss, self.update_k_t),
+        _, g_loss, _, d_loss = self.sess.run(
+            (self.train_op, self.gen_loss_G, self.gen_loss_D, self.dis_loss),
             feed_dict={
                 self.x_train: x_batch,
+                self.z_G: z_G,
                 self.z_D: z_D,
             }
         )
@@ -217,9 +227,18 @@ class BEGAN(BaseModel):
             self.gen_trainer = gen_opt.minimize(self.gen_loss_G, var_list=self.f_gen.variables)
             self.dis_trainer = dis_opt.minimize(self.dis_loss - self.k_t * self.gen_loss_D, var_list=self.f_dis.variables)
             self.update_k_t = self.k_t.assign(tf.clip_by_value(self.k_t + self.lambda_k * (self.gamma * self.dis_loss - self.gen_loss_D), 0.0, 1.0))
+
+            with tf.control_dependencies([self.gen_trainer, self.dis_trainer, self.update_k_t] + \
+                                         self.f_dis.update_ops + self.f_gen.update_ops):
+                self.train_op = tf.no_op(name='train')
+
         else:
             self.gen_trainer = gen_opt.minimize(self.gen_loss_G, var_list=self.f_gen.variables)
             self.dis_trainer = dis_opt.minimize(self.dis_loss - tf.maximum(0.0, self.margin - self.gen_loss_D), var_list=self.f_dis.variables)
+
+            with tf.control_dependencies([self.gen_trainer, self.dis_trainer] + \
+                                                 self.f_dis.update_ops + self.f_gen.update_ops):
+                self.train_op = tf.no_op(name='train')
 
         # Predictor
         self.z_test = tf.placeholder(tf.float32, shape=(None, self.z_dims))
