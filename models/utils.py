@@ -1,5 +1,8 @@
 import tensorflow as tf
 
+def image_cast(img):
+    return tf.cast(img * 127.5 + 127.5, tf.uint8)
+
 def kl_loss(avg, log_var):
     with tf.name_scope('KLLoss'):
         return tf.reduce_mean(-0.5 * tf.reduce_sum(1.0 + log_var - tf.square(avg) - tf.exp(log_var), axis=-1))

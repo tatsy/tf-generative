@@ -184,49 +184,49 @@ class DCGAN(BaseModel):
         return x_sample
 
     def make_test_data(self):
-        self.test_data = np.random.uniform(-1, 1, size=(self.test_size * self.test_size, self.z_dims))
+        self.test_data = np.random.uniform(-1.0, 1.0, size=(self.test_size * self.test_size, self.z_dims))
 
     def build_model(self):
         # Trainer
-        self.discriminator = Discriminator(self.input_shape, use_wnorm=self.use_wnorm)
-        self.generator = Generator(self.input_shape, self.z_dims, use_wnorm=self.use_wnorm)
+        self.f_dis = Discriminator(self.input_shape, use_wnorm=self.use_wnorm)
+        self.f_gen = Generator(self.input_shape, self.z_dims, use_wnorm=self.use_wnorm)
 
-        batch_shape = (None,) + (self.z_dims,)
+        batch_shape = (None, self.z_dims)
         self.z_train = tf.placeholder(tf.float32, shape=batch_shape)
-        x_fake = self.generator(self.z_train)
-        y_fake = self.discriminator(x_fake)
+        x_fake = self.f_gen(self.z_train)
+        y_fake = self.f_dis(x_fake)
 
         self.gen_loss = tf.losses.sigmoid_cross_entropy(tf.ones_like(y_fake), y_fake)
         self.gen_optimizer = tf.train.AdamOptimizer(2.0e-4, beta1=0.5) \
-                             .minimize(self.gen_loss, var_list=self.generator.variables)
+                             .minimize(self.gen_loss, var_list=self.f_gen.variables)
 
         batch_shape = (None,) + self.input_shape
         self.x_train = tf.placeholder(tf.float32, batch_shape)
 
-        y_real = self.discriminator(self.x_train)
+        y_real = self.f_dis(self.x_train)
         self.dis_loss = 0.5 * tf.losses.sigmoid_cross_entropy(tf.ones_like(y_real), y_real) + \
                         0.5 * tf.losses.sigmoid_cross_entropy(tf.zeros_like(y_fake), y_fake)
         self.dis_optimizer = tf.train.AdamOptimizer(2.0e-4, beta1=0.5) \
-                             .minimize(self.dis_loss, var_list=self.discriminator.variables)
+                             .minimize(self.dis_loss, var_list=self.f_dis.variables)
 
         self.gen_acc = binary_accuracy(tf.ones_like(y_fake), y_fake)
         self.dis_acc = 0.5 * binary_accuracy(tf.ones_like(y_real), y_real) + \
                        0.5 * binary_accuracy(tf.zeros_like(y_fake), y_fake)
 
         with tf.control_dependencies([self.gen_optimizer, self.dis_optimizer] + \
-                                      self.discriminator.update_ops + \
-                                      self.generator.update_ops):
+                                      self.f_dis.update_ops + \
+                                      self.f_gen.update_ops):
             self.train_op = tf.no_op(name='train')
 
         # Predictor
         self.z_test = tf.placeholder(tf.float32, shape=(None, self.z_dims))
-        self.x_test = self.generator(self.z_test, training=False)
+        self.x_test = self.f_gen(self.z_test, training=False)
 
         x_tile = self.image_tiling(self.x_test, self.test_size, self.test_size)
 
         tf.summary.image('x_real', self.x_train, 10)
-        tf.summary.image('x_fake', x_fake, 10)
-        tf.summary.image('x_tile', x_tile, 1)
+        tf.summary.image('x_fake', image_cast(x_fake), 10)
+        tf.summary.image('x_tile', image_cast(x_tile), 1)
         tf.summary.scalar('gen_loss', self.gen_loss)
         tf.summary.scalar('dis_loss', self.dis_loss)
         tf.summary.scalar('gen_acc', self.gen_acc)
