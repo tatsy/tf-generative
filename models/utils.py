@@ -17,6 +17,38 @@ def sample_normal(avg, log_var):
         epsilon = tf.random_normal(tf.shape(avg))
         return tf.add(avg, tf.multiply(tf.exp(0.5 * log_var), epsilon))
 
+def vgg_conv_unit(x, filters, layers, training=True):
+    # Convolution
+    for i in range(layers):
+        x = tf.layers.conv2d(x, filters, (3, 3), (1, 1), 'same',
+            kernel_initializer=tf.contrib.layers.xavier_initializer())
+        x = tf.layers.batch_normalization(x, training=training)
+        x = tf.nn.relu(x)
+
+    # Downsample
+    x = tf.layers.conv2d(x, filters, (2, 2), (2, 2), 'same',
+        kernel_initializer=tf.contrib.layers.xavier_initializer())
+    x = tf.layers.batch_normalization(x, training=training)
+    x = tf.nn.relu(x)
+
+    return x
+
+def vgg_deconv_unit(x, filters, layers, training=True):
+    # Upsample
+    x = tf.layers.conv2d_transpose(x, filters, (2, 2), (2, 2), 'same',
+        kernel_initializer=tf.contrib.layers.xavier_initializer())
+    x = tf.layers.batch_normalization(x, training=training)
+    x = tf.nn.relu(x)
+
+    # Convolution
+    for i in range(layers):
+        x = tf.layers.conv2d(x, filters, (3, 3), (1, 1), 'same',
+            kernel_initializer=tf.contrib.layers.xavier_initializer())
+        x = tf.layers.batch_normalization(x, training=training)
+        x = tf.nn.relu(x)
+
+    return x
+
 def time_format(t):
     m, s = divmod(t, 60)
     m = int(m)

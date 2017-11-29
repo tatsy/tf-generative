@@ -15,33 +15,27 @@ class Generator(object):
     def __call__(self, inputs, training=True):
         with tf.variable_scope(self.name, reuse=self.reuse):
             with tf.variable_scope('fc1'):
-                w = self.input_shape[0] // (2 ** 3)
-                x = tf.layers.dense(inputs, w * w * 256)
+                w = self.input_shape[0] // (2 ** 4)
+                x = tf.layers.dense(inputs, w * w * 512)
                 x = tf.nn.relu(x)
-                x = tf.reshape(x, [-1, w, w, 256])
+                x = tf.reshape(x, [-1, w, w, 512])
 
             with tf.variable_scope('deconv1'):
-                x = tf.layers.conv2d_transpose(x, 256, (5, 5), (2, 2), 'same',
-                                               kernel_initializer=tf.contrib.layers.xavier_initializer())
-                # x = tf.layers.batch_normalization(x, training=training)
-                x = lrelu(x)
+                x = vgg_deconv_unit(x, 512, 2, training=training)
 
             with tf.variable_scope('deconv2'):
-                x = tf.layers.conv2d_transpose(x, 128, (5, 5), (2, 2), 'same',
-                                               kernel_initializer=tf.contrib.layers.xavier_initializer())
-                # x = tf.layers.batch_normalization(x, training=training)
-                x = lrelu(x)
+                x = vgg_deconv_unit(x, 256, 2, training=training)
 
             with tf.variable_scope('deconv3'):
-                x = tf.layers.conv2d_transpose(x, 64, (5, 5), (2, 2), 'same',
-                                               kernel_initializer=tf.contrib.layers.xavier_initializer())
-                # x = tf.layers.batch_normalization(x, training=training)
-                x = lrelu(x)
+                x = vgg_deconv_unit(x, 128, 2, training=training)
 
             with tf.variable_scope('deconv4'):
+                x = vgg_deconv_unit(x, 64, 2, training=training)
+
+            with tf.variable_scope('deconv5'):
                 d = self.input_shape[2]
-                x = tf.layers.conv2d_transpose(x, d, (3, 3), (1, 1), 'same',
-                                               kernel_initializer=tf.contrib.layers.xavier_initializer())
+                x = tf.layers.conv2d(x, d, (1, 1), (1, 1), 'same',
+                    kernel_initializer=tf.contrib.layers.xavier_initializer())
                 x = tf.tanh(x)
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
@@ -60,56 +54,44 @@ class Discriminator(object):
     def __call__(self, inputs, training=True):
         with tf.variable_scope(self.name, reuse=self.reuse):
             with tf.variable_scope('conv1'):
-                x = tf.layers.conv2d(inputs, 64, (5, 5), (2, 2), 'same',
-                                     kernel_initializer=tf.contrib.layers.xavier_initializer())
-                # x = tf.layers.batch_normalization(x, training=training)
-                x = lrelu(x)
+                x = vgg_conv_unit(inputs, 64, 2, training=training)
 
             with tf.variable_scope('conv2'):
-                x = tf.layers.conv2d(x, 128, (5, 5), (2, 2), 'same',
-                                     kernel_initializer=tf.contrib.layers.xavier_initializer())
-                # x = tf.layers.batch_normalization(x, training=training)
-                x = lrelu(x)
+                x = vgg_conv_unit(x, 128, 2, training=training)
 
             with tf.variable_scope('conv3'):
-                x = tf.layers.conv2d(x, 256, (5, 5), (2, 2), 'same',
-                                     kernel_initializer=tf.contrib.layers.xavier_initializer())
-                # x = tf.layers.batch_normalization(x, training=training)
-                x = lrelu(x)
+                x = vgg_conv_unit(x, 256, 2, training=training)
+
+            with tf.variable_scope('conv4'):
+                x = vgg_conv_unit(x, 512, 2, training=training)
 
             with tf.variable_scope('global_average'):
                 x = tf.reduce_mean(x, axis=[1, 2])
 
-            with tf.variable_scope('fc2'):
-                w = self.input_shape[0] // (2 ** 3)
-                x = tf.reshape(x, [-1, 1, 1, 256])
-                x = tf.layers.conv2d_transpose(x, 256, (w, w), (1, 1), 'valid',
-                                               kernel_initializer=tf.contrib.layers.xavier_initializer())
-                # x = tf.layers.batch_normalization(x, training=training)
-                x = lrelu(x)
+            with tf.variable_scope('resizing'):
+                w = self.input_shape[0] // (2 ** 4)
+                x = tf.reshape(x, [-1, 1, 1, 512])
+                x = tf.layers.conv2d_transpose(x, 512, (w, w), (1, 1), 'valid',
+                    kernel_initializer=tf.contrib.layers.xavier_initializer())
+                x = tf.layers.batch_normalization(x, training=training)
+                x = tf.nn.relu(x)
 
             with tf.variable_scope('deconv1'):
-                x = tf.layers.conv2d_transpose(x, 256, (5, 5), (2, 2), 'same',
-                                               kernel_initializer=tf.contrib.layers.xavier_initializer())
-                # x = tf.layers.batch_normalization(x, training=training)
-                x = lrelu(x)
+                x = vgg_deconv_unit(x, 512, 2, training=training)
 
             with tf.variable_scope('deconv2'):
-                x = tf.layers.conv2d_transpose(x, 128, (5, 5), (2, 2), 'same',
-                                               kernel_initializer=tf.contrib.layers.xavier_initializer())
-                # x = tf.layers.batch_normalization(x, training=training)
-                x = lrelu(x)
+                x = vgg_deconv_unit(x, 256, 2, training=training)
 
             with tf.variable_scope('deconv3'):
-                x = tf.layers.conv2d_transpose(x, 64, (5, 5), (2, 2), 'same',
-                                               kernel_initializer=tf.contrib.layers.xavier_initializer())
-                # x = tf.layers.batch_normalization(x, training=training)
-                x = lrelu(x)
+                x = vgg_deconv_unit(x, 128, 2, training=training)
 
             with tf.variable_scope('deconv4'):
+                x = vgg_deconv_unit(x, 64, 2, training=training)
+
+            with tf.variable_scope('deconv5'):
                 d = self.input_shape[2]
-                x = tf.layers.conv2d_transpose(x, d, (5, 5), (1, 1), 'same',
-                                               kernel_initializer=tf.contrib.layers.xavier_initializer())
+                x = tf.layers.conv2d(x, d, (1, 1), (1, 1), 'same',
+                    kernel_initializer=tf.contrib.layers.xavier_initializer())
                 x = tf.tanh(x)
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=self.name)
@@ -237,7 +219,7 @@ class BEGAN(BaseModel):
             self.dis_trainer = dis_opt.minimize(self.dis_loss - tf.maximum(0.0, self.margin - self.gen_loss_D), var_list=self.f_dis.variables)
 
             with tf.control_dependencies([self.gen_trainer, self.dis_trainer] + \
-                                                 self.f_dis.update_ops + self.f_gen.update_ops):
+                                          self.f_dis.update_ops + self.f_gen.update_ops):
                 self.train_op = tf.no_op(name='train')
 
         # Predictor

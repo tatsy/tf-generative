@@ -16,6 +16,7 @@ models = {
     'vae': VAE,
     'dcgan': DCGAN,
     'began': BEGAN,
+    'wgan': WGAN,
     'cvae': CVAE,
     'cvaegan': CVAEGAN
 }
