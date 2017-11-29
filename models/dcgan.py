@@ -20,19 +20,21 @@ class Generator(object):
                 w = self.input_shape[0] // (2 ** 3)
                 x = tf.reshape(inputs, [-1, 1, 1, self.z_dims])
                 if self.use_wnorm:
-                    x = conv2d_transpose_wnorm(x, 256, (w, w), (1, 1),
+                    x = conv2d_transpose_wnorm(x, 256, (w, w), (1, 1), use_scale=True,
                                                kernel_initializer=tf.contrib.layers.xavier_initializer())
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
                 else:
-                    x = tf.layers.conv2d(x, 256, (w, w), (1, 1),
-                                         kernel_initializer=tf.contrib.layers.xavier_initializer())
+                    x = tf.layers.conv2d_transpose(x, 256, (w, w), (1, 1),
+                                                   kernel_initializer=tf.contrib.layers.xavier_initializer())
                     x = tf.layers.batch_normalization(x, training=training)
 
                 x = tf.nn.relu(x)
 
             with tf.variable_scope('conv1'):
                 if self.use_wnorm:
-                    x = conv2d_transpose_wnorm(x, 256, (5, 5), (2, 2), 'same', use_scale=False,
+                    x = conv2d_transpose_wnorm(x, 256, (5, 5), (2, 2), 'same', use_scale=True,
                                                kernel_initializer=tf.contrib.layers.xavier_initializer())
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
                 else:
                     x = tf.layers.conv2d_transpose(x, 256, (5, 5), (2, 2), 'same', kernel_initializer=tf.contrib.layers.xavier_initializer())
                     x = tf.layers.batch_normalization(x, training=training)
@@ -40,8 +42,9 @@ class Generator(object):
 
             with tf.variable_scope('conv2'):
                 if self.use_wnorm:
-                    x = conv2d_transpose_wnorm(x, 128, (5, 5), (2, 2), 'same', use_scale=False,
+                    x = conv2d_transpose_wnorm(x, 128, (5, 5), (2, 2), 'same', use_scale=True,
                                                kernel_initializer=tf.contrib.layers.xavier_initializer())
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
                 else:
                     x = tf.layers.conv2d_transpose(x, 128, (5, 5), (2, 2), 'same', kernel_initializer=tf.contrib.layers.xavier_initializer())
                     x = tf.layers.batch_normalization(x, training=training)
@@ -49,8 +52,9 @@ class Generator(object):
 
             with tf.variable_scope('conv3'):
                 if self.use_wnorm:
-                    x = conv2d_transpose_wnorm(x, 64, (5, 5), (2, 2), 'same', use_scale=False,
+                    x = conv2d_transpose_wnorm(x, 64, (5, 5), (2, 2), 'same', use_scale=True,
                                                kernel_initializer=tf.contrib.layers.xavier_initializer())
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
                 else:
                     x = tf.layers.conv2d_transpose(x, 64, (5, 5), (2, 2), 'same', kernel_initializer=tf.contrib.layers.xavier_initializer())
                     x = tf.layers.batch_normalization(x, training=training)
@@ -83,8 +87,9 @@ class Discriminator(object):
         with tf.variable_scope('discriminator', reuse=self.reuse):
             with tf.variable_scope('conv1'):
                 if self.use_wnorm:
-                    x = conv2d_wnorm(inputs, 64, (5, 5), (2, 2), 'same', use_scale=False,
+                    x = conv2d_wnorm(inputs, 64, (5, 5), (2, 2), 'same', use_scale=True,
                                      kernel_initializer=tf.contrib.layers.xavier_initializer())
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
                 else:
                     x = tf.layers.conv2d(inputs, 64, (5, 5), (2, 2), 'same', kernel_initializer=tf.contrib.layers.xavier_initializer())
                     x = tf.layers.batch_normalization(x, training=training)
@@ -92,8 +97,9 @@ class Discriminator(object):
 
             with tf.variable_scope('conv2'):
                 if self.use_wnorm:
-                    x = conv2d_wnorm(x, 128, (5, 5), (2, 2), 'same', use_scale=False,
+                    x = conv2d_wnorm(x, 128, (5, 5), (2, 2), 'same', use_scale=True,
                                      kernel_initializer=tf.contrib.layers.xavier_initializer())
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
                 else:
                     x = tf.layers.conv2d(x, 128, (5, 5), (2, 2), 'same', kernel_initializer=tf.contrib.layers.xavier_initializer())
                     x = tf.layers.batch_normalization(x, training=training)
@@ -101,8 +107,9 @@ class Discriminator(object):
 
             with tf.variable_scope('conv3'):
                 if self.use_wnorm:
-                    x = conv2d_wnorm(x, 256, (5, 5), (2, 2), 'same', use_scale=False,
+                    x = conv2d_wnorm(x, 256, (5, 5), (2, 2), 'same', use_scale=True,
                                      kernel_initializer=tf.contrib.layers.xavier_initializer())
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
                 else:
                     x = tf.layers.conv2d(x, 256, (5, 5), (2, 2), 'same', kernel_initializer=tf.contrib.layers.xavier_initializer())
                     x = tf.layers.batch_normalization(x, training=training)
@@ -110,8 +117,9 @@ class Discriminator(object):
 
             with tf.variable_scope('conv4'):
                 if self.use_wnorm:
-                    x = conv2d_wnorm(x, 512, (5, 5), (2, 2), 'same', use_scale=False,
+                    x = conv2d_wnorm(x, 512, (5, 5), (2, 2), 'same', use_scale=True,
                                      kernel_initializer=tf.contrib.layers.xavier_initializer())
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
                 else:
                     x = tf.layers.conv2d(x, 512, (5, 5), (2, 2), 'same', kernel_initializer=tf.contrib.layers.xavier_initializer())
                     x = tf.layers.batch_normalization(x, training=training)
@@ -144,16 +152,17 @@ class DCGAN(BaseModel):
         self.z_dims = z_dims
         self.use_wnorm = True
 
+        self.f_gen = None
+        self.f_dis = None
         self.gen_loss = None
         self.dis_loss = None
-        self.gen_optimizer = None
-        self.dis_optimizer = None
         self.train_op = None
 
         self.gen_acc = None
         self.dis_acc = None
 
         self.x_train = None
+        self.z_train = None
 
         self.z_test = None
         self.x_test = None
@@ -191,29 +200,29 @@ class DCGAN(BaseModel):
         self.f_dis = Discriminator(self.input_shape, use_wnorm=self.use_wnorm)
         self.f_gen = Generator(self.input_shape, self.z_dims, use_wnorm=self.use_wnorm)
 
-        batch_shape = (None, self.z_dims)
-        self.z_train = tf.placeholder(tf.float32, shape=batch_shape)
+        x_shape = (None,) + self.input_shape
+        z_shape = (None, self.z_dims)
+        self.x_train = tf.placeholder(tf.float32, shape=x_shape)
+        self.z_train = tf.placeholder(tf.float32, shape=z_shape)
         x_fake = self.f_gen(self.z_train)
         y_fake = self.f_dis(x_fake)
+        y_real = self.f_dis(self.x_train)
 
         self.gen_loss = tf.losses.sigmoid_cross_entropy(tf.ones_like(y_fake), y_fake)
-        self.gen_optimizer = tf.train.AdamOptimizer(2.0e-4, beta1=0.5) \
-                             .minimize(self.gen_loss, var_list=self.f_gen.variables)
-
-        batch_shape = (None,) + self.input_shape
-        self.x_train = tf.placeholder(tf.float32, batch_shape)
-
-        y_real = self.f_dis(self.x_train)
         self.dis_loss = 0.5 * tf.losses.sigmoid_cross_entropy(tf.ones_like(y_real), y_real) + \
                         0.5 * tf.losses.sigmoid_cross_entropy(tf.zeros_like(y_fake), y_fake)
-        self.dis_optimizer = tf.train.AdamOptimizer(2.0e-4, beta1=0.5) \
-                             .minimize(self.dis_loss, var_list=self.f_dis.variables)
+
+        gen_optim = tf.train.AdamOptimizer(learning_rate=2.0e-4, beta1=0.5)
+        dis_optim = tf.train.AdamOptimizer(learning_rate=2.0e-4, beta1=0.5)
+
+        gen_train_op = gen_optim.minimize(self.gen_loss, var_list=self.f_gen.variables)
+        dis_train_op = dis_optim.minimize(self.dis_loss, var_list=self.f_dis.variables)
 
         self.gen_acc = binary_accuracy(tf.ones_like(y_fake), y_fake)
         self.dis_acc = 0.5 * binary_accuracy(tf.ones_like(y_real), y_real) + \
                        0.5 * binary_accuracy(tf.zeros_like(y_fake), y_fake)
 
-        with tf.control_dependencies([self.gen_optimizer, self.dis_optimizer] + \
+        with tf.control_dependencies([gen_train_op, dis_train_op] + \
                                       self.f_dis.update_ops + \
                                       self.f_gen.update_ops):
             self.train_op = tf.no_op(name='train')
@@ -224,7 +233,7 @@ class DCGAN(BaseModel):
 
         x_tile = self.image_tiling(self.x_test, self.test_size, self.test_size)
 
-        tf.summary.image('x_real', self.x_train, 10)
+        tf.summary.image('x_real', image_cast(self.x_train), 10)
         tf.summary.image('x_fake', image_cast(x_fake), 10)
         tf.summary.image('x_tile', image_cast(x_tile), 1)
         tf.summary.scalar('gen_loss', self.gen_loss)
