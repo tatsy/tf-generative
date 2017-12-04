@@ -15,8 +15,11 @@ from datasets import load_data, mnist, svhn
 models = {
     'vae': VAE,
     'dcgan': DCGAN,
+    'improved': ImprovedGAN,
+    'resnet': ResNetGAN,
     'began': BEGAN,
     'wgan': WGAN,
+    'lsgan': LSGAN,
     'cvae': CVAE,
     'cvaegan': CVAEGAN
 }
@@ -26,6 +29,7 @@ def main(_):
     parser = argparse.ArgumentParser(description='Training GANs or VAEs')
     parser.add_argument('--model', type=str, required=True)
     parser.add_argument('--dataset', type=str, required=True)
+    parser.add_argument('--datasize', type=int, default=-1)
     parser.add_argument('--epoch', type=int, default=200)
     parser.add_argument('--batchsize', type=int, default=50)
     parser.add_argument('--output', default='output')
@@ -49,15 +53,16 @@ def main(_):
     elif args.dataset == 'svhn':
         datasets = svhn.load_data()
     else:
-        datasets = load_data(args.dataset)
+        datasets = load_data(args.dataset, args.datasize)
 
     # Construct model
     if args.model not in models:
         raise Exception('Unknown model:', args.model)
 
     model = models[args.model](
+        batchsize=args.batchsize,
         input_shape=datasets.shape[1:],
-        attr_names=datasets.attr_names or None,
+        attr_names=None or datasets.attr_names,
         z_dims=args.zdims,
         output=args.output,
         resume=args.resume
@@ -69,10 +74,9 @@ def main(_):
     tf.set_random_seed(12345)
 
     # Training loop
-    datasets.images = datasets.images * 2.0 - 1.0
+    datasets.images = datasets.images.astype('float32') * 2.0 - 1.0
     model.main_loop(datasets,
-                    epochs=args.epoch,
-                    batchsize=args.batchsize)
+                    epochs=args.epoch)
 
 if __name__ == '__main__':
     tf.app.run(main)

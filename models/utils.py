@@ -26,13 +26,13 @@ def vgg_conv_unit(x, filters, layers, training=True):
         x = tf.layers.conv2d(x, filters, (3, 3), (1, 1), 'same',
             kernel_initializer=tf.contrib.layers.xavier_initializer())
         x = tf.layers.batch_normalization(x, training=training)
-        x = tf.nn.relu(x)
+        x = lrelu(x)
 
     # Downsample
     x = tf.layers.conv2d(x, filters, (2, 2), (2, 2), 'same',
         kernel_initializer=tf.contrib.layers.xavier_initializer())
     x = tf.layers.batch_normalization(x, training=training)
-    x = tf.nn.relu(x)
+    x = lrelu(x)
 
     return x
 
@@ -41,14 +41,14 @@ def vgg_deconv_unit(x, filters, layers, training=True):
     x = tf.layers.conv2d_transpose(x, filters, (2, 2), (2, 2), 'same',
         kernel_initializer=tf.contrib.layers.xavier_initializer())
     x = tf.layers.batch_normalization(x, training=training)
-    x = tf.nn.relu(x)
+    x = lrelu(x)
 
     # Convolution
     for i in range(layers):
         x = tf.layers.conv2d(x, filters, (3, 3), (1, 1), 'same',
             kernel_initializer=tf.contrib.layers.xavier_initializer())
         x = tf.layers.batch_normalization(x, training=training)
-        x = tf.nn.relu(x)
+        x = lrelu(x)
 
     return x
 

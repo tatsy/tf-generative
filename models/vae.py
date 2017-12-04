@@ -1,40 +1,65 @@
-import numpy as np
 import tensorflow as tf
+import numpy as np
 
 from .base import BaseModel
 from .utils import *
+from .wnorm import *
 
 class Encoder(object):
-    def __init__(self, input_shape, z_dims):
+    def __init__(self, input_shape, z_dims, use_wnorm=True):
         self.variables = None
         self.update_ops = None
         self.reuse = False
         self.input_shape = input_shape
         self.z_dims = z_dims
+        self.use_wnorm = use_wnorm
 
     def __call__(self, inputs, training=True):
         with tf.variable_scope('encoder', reuse=self.reuse):
             with tf.variable_scope('conv1'):
-                x = tf.layers.conv2d(inputs, 64, (5, 5), (2, 2), 'same')
-                x = tf.layers.batch_normalization(x, training=training)
+                if self.use_wnorm:
+                    x = conv2d_wnorm(inputs, 64, (5, 5), (2, 2), 'same', use_scale=True)
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
+                else:
+                    x = tf.layers.conv2d(inputs, 64, (5, 5), (2, 2), 'same')
+                    x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
             with tf.variable_scope('conv2'):
-                x = tf.layers.conv2d(x, 128, (5, 5), (2, 2), 'same')
-                x = tf.layers.batch_normalization(x, training=training)
+                if self.use_wnorm:
+                    x = conv2d_wnorm(x, 128, (5, 5), (2, 2), 'same', use_scale=True)
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
+                else:
+                    x = tf.layers.conv2d(x, 128, (5, 5), (2, 2), 'same')
+                    x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
             with tf.variable_scope('conv3'):
-                x = tf.layers.conv2d(x, 256, (5, 5), (2, 2), 'same')
-                x = tf.layers.batch_normalization(x, training=training)
+                if self.use_wnorm:
+                    x = conv2d_wnorm(x, 256, (5, 5), (2, 2), 'same', use_scale=True)
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
+                else:
+                    x = tf.layers.conv2d(x, 256, (5, 5), (2, 2), 'same')
+                    x = tf.layers.batch_normalization(x, training=training)
                 x = lrelu(x)
 
-            with tf.variable_scope('global_average'):
-                x = tf.reduce_mean(x, axis=[1, 2])
+            with tf.variable_scope('conv4'):
+                if self.use_wnorm:
+                    x = conv2d_wnorm(x, 512, (5, 5), (2, 2), 'same', use_scale=True)
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
+                else:
+                    x = tf.layers.conv2d(x, 512, (5, 5), (2, 2), 'same')
+                    x = tf.layers.batch_normalization(x, training=training)
+                x = lrelu(x)
 
             with tf.variable_scope('fc1'):
-                z_avg = tf.layers.dense(x, self.z_dims)
-                z_log_var = tf.layers.dense(x, self.z_dims)
+                w = self.input_shape[0] // (2 ** 4)
+                if self.use_wnorm:
+                    z_avg = conv2d_wnorm(x, self.z_dims, (w, w), (1, 1), 'valid', use_scale=True)
+                    z_log_var = conv2d_wnorm(x, self.z_dims, (w, w), (1, 1), 'valid', use_scale=True)
+                else:
+                    z_avg = tf.layers.conv2d(x, self.z_dims, (w, w), (1, 1), 'valid')
+                    z_log_var = tf.layers.conv2d(x, self.z_dims, (w, w), (1, 1), 'valid')
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='encoder')
         self.update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS, scope='encoder')
@@ -43,40 +68,60 @@ class Encoder(object):
         return z_avg, z_log_var
 
 class Decoder(object):
-    def __init__(self, input_shape, z_dims):
+    def __init__(self, input_shape, z_dims, use_wnorm=True):
         self.variables = None
         self.update_ops = None
         self.reuse = False
         self.input_shape = input_shape
         self.z_dims = z_dims
+        self.use_wnorm = use_wnorm
 
     def __call__(self, inputs, training=True):
         with tf.variable_scope('decoder', reuse=self.reuse):
-            with tf.variable_scope('fc1'):
+            with tf.variable_scope('deconv1'):
                 w = self.input_shape[0] // (2 ** 3)
                 x = tf.reshape(inputs, [-1, 1, 1, self.z_dims])
-                x = tf.layers.conv2d_transpose(x, 256, (w, w), (1, 1), 'valid')
-                x = tf.layers.batch_normalization(x, training=training)
-                x = lrelu(x)
+                if self.use_wnorm:
+                    x = conv2d_transpose_wnorm(x, 256, (w, w), (1, 1), 'valid', use_scale=True)
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
+                else:
+                    x = tf.layers.conv2d_transpose(x, 256, (w, w), (1, 1), 'valid')
+                    x = tf.layers.batch_normalization(x, training=training)
+                x = tf.nn.relu(x)
 
-            with tf.variable_scope('conv1'):
-                x = tf.layers.conv2d_transpose(x, 256, (5, 5), (2, 2), 'same')
-                x = tf.layers.batch_normalization(x, training=training)
-                x = lrelu(x)
+            with tf.variable_scope('deconv2'):
+                if self.use_wnorm:
+                    x = conv2d_transpose_wnorm(x, 256, (5, 5), (2, 2), 'same', use_scale=True)
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
+                else:
+                    x = tf.layers.conv2d_transpose(x, 256, (5, 5), (2, 2), 'same')
+                    x = tf.layers.batch_normalization(x, training=training)
+                x = tf.nn.relu(x)
 
-            with tf.variable_scope('conv2'):
-                x = tf.layers.conv2d_transpose(x, 128, (5, 5), (2, 2), 'same')
-                x = tf.layers.batch_normalization(x, training=training)
-                x = lrelu(x)
+            with tf.variable_scope('deconv3'):
+                if self.use_wnorm:
+                    x = conv2d_transpose_wnorm(x, 128, (5, 5), (2, 2), 'same', use_scale=True)
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
+                else:
+                    x = tf.layers.conv2d_transpose(x, 128, (5, 5), (2, 2), 'same')
+                    x = tf.layers.batch_normalization(x, training=training)
+                x = tf.nn.relu(x)
 
-            with tf.variable_scope('conv3'):
-                x = tf.layers.conv2d_transpose(x, 64, (5, 5), (2, 2), 'same')
-                x = tf.layers.batch_normalization(x, training=training)
-                x = lrelu(x)
+            with tf.variable_scope('deconv4'):
+                if self.use_wnorm:
+                    x = conv2d_transpose_wnorm(x, 64, (5, 5), (2, 2), 'same', use_scale=True)
+                    x = tf.layers.batch_normalization(x, scale=False, training=training)
+                else:
+                    x = tf.layers.conv2d_transpose(x, 64, (5, 5), (2, 2), 'same')
+                    x = tf.layers.batch_normalization(x, training=training)
+                x = tf.nn.relu(x)
 
-            with tf.variable_scope('conv4'):
+            with tf.variable_scope('deconv5'):
                 d = self.input_shape[2]
-                x = tf.layers.conv2d_transpose(x, d, (3, 3), (1, 1), 'same')
+                if self.use_wnorm:
+                    x = conv2d_transpose_wnorm(x, d, (5, 5), (1, 1), 'same', use_scale=True)
+                else:
+                    x = tf.layers.conv2d_transpose(x, d, (5, 5), (1, 1), 'same')
                 x = tf.tanh(x)
 
         self.variables = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope='decoder')
@@ -95,6 +140,7 @@ class VAE(BaseModel):
         super(VAE, self).__init__(input_shape=input_shape, name=name, **kwargs)
 
         self.z_dims = z_dims
+        self.use_wnorm = False
 
         self.encoder = None
         self.decoder = None
@@ -128,8 +174,8 @@ class VAE(BaseModel):
         self.test_data = np.random.normal(size=(self.test_size * self.test_size, self.z_dims))
 
     def build_model(self):
-        self.encoder = Encoder(self.input_shape, self.z_dims)
-        self.decoder = Decoder(self.input_shape, self.z_dims)
+        self.encoder = Encoder(self.input_shape, self.z_dims, self.use_wnorm)
+        self.decoder = Decoder(self.input_shape, self.z_dims, self.use_wnorm)
 
         # Trainer
         batch_shape = (None,) + self.input_shape
@@ -155,9 +201,9 @@ class VAE(BaseModel):
         x_tile = self.image_tiling(self.x_test, self.test_size, self.test_size)
 
         # Summary
-        tf.summary.image('x_real', self.x_train, 10)
-        tf.summary.image('x_fake', x_sample, 10)
-        tf.summary.image('x_tile', x_tile, 1)
+        tf.summary.image('x_real', image_cast(self.x_train), 10)
+        tf.summary.image('x_fake', image_cast(x_sample), 10)
+        tf.summary.image('x_tile', image_cast(x_tile), 1)
         tf.summary.scalar('rec_loss', self.rec_loss)
         tf.summary.scalar('kl_loss', self.kl_loss)
 

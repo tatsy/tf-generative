@@ -26,8 +26,11 @@ class BaseModel(metaclass=ABCMeta):
         """
         if 'name' not in kwargs:
             raise Exception('Please specify model name!')
-
         self.name = kwargs['name']
+
+        if 'batchsize' not in kwargs:
+            raise Exception('Please specify batchsize!')
+        self.batchsize = kwargs['batchsize']
 
         if 'input_shape' not in kwargs:
             raise Exception('Please specify input shape!')
@@ -68,7 +71,7 @@ class BaseModel(metaclass=ABCMeta):
         errmsg = 'Input size should be 32 x 32 or 64 x 64!'
         raise Exception(errmsg)
 
-    def main_loop(self, datasets, epochs=100, batchsize=50):
+    def main_loop(self, datasets, epochs=100):
         """
         Main learning loop
         """
@@ -110,7 +113,7 @@ class BaseModel(metaclass=ABCMeta):
             # Update rule
             num_data = len(datasets)
             update_epoch = current_epoch.assign(current_epoch + 1)
-            update_batch = current_batch.assign(tf.mod(tf.minimum(current_batch + batchsize, num_data), num_data))
+            update_batch = current_batch.assign(tf.mod(tf.minimum(current_batch + self.batchsize, num_data), num_data))
 
             self.writer = tf.summary.FileWriter(log_out_dir, self.sess.graph)
             self.sess.graph.finalize()
@@ -119,9 +122,15 @@ class BaseModel(metaclass=ABCMeta):
             for e in range(current_epoch.eval(), epochs):
                 perm = np.random.permutation(num_data)
                 start_time = time.time()
-                for b in range(current_batch.eval(), num_data, batchsize):
-                    bsize = min(batchsize, num_data - b)
+                for b in range(current_batch.eval(), num_data, self.batchsize):
+                    # Update batch index
+                    self.sess.run(update_batch)
+
+                    # Check batch size
+                    bsize = min(self.batchsize, num_data - b)
                     indx = perm[b:b+bsize]
+                    if bsize < self.batchsize:
+                        break
 
                     # Get batch and train on it
                     x_batch = self.make_batch(datasets, indx)
@@ -154,9 +163,6 @@ class BaseModel(metaclass=ABCMeta):
                     if self.test_mode:
                         print('\nFinish testing: %s' % self.name)
                         return
-
-                    # Update batch index
-                    self.sess.run(update_batch)
 
                 print('')
                 self.sess.run(update_epoch)
